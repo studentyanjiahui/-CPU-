@@ -1,0 +1,15 @@
+module IM(addr,dout);
+    input   [11:2]  addr ;  // address bus
+    output reg [31:0]  dout ;  // 32-bit memory output
+
+    reg [31:0] IM [1023:0];
+    
+    initial begin 
+        $readmemh("RF.mem",IM);
+     end
+    
+    always @( * ) begin
+          dout <= IM[addr];
+    end
+
+endmodule
