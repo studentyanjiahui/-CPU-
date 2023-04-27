@@ -1,0 +1,22 @@
+module mips_pipeline(
+     input PCWr,
+     input clk,
+     input rst
+    );
+    
+    wire [31:0] rom_inst,dmdata_i,dmdata_o;
+    wire [11:2] mips_pc,dmaddr;
+    wire re,wri;
+
+    mips U_mips(.PCWr(PCWr),.clk(clk),.rst(rst),.im_inst(rom_inst),
+    .dm_idata(dmdata_i),.im_addr(mips_pc),.dm_odata(dmdata_o),
+    .wr_i(wri),.re_en(re),.dm_addrs(dmaddr));
+    
+    IM U_IM(.addr(mips_pc),.dout(rom_inst));
+    
+    DM U_DM(.addr(dmaddr),.wdata(dmdata_o),.re_en(re),
+          .wr_en(wri),.rdata(dmdata_i));
+
+
+    
+endmodule
