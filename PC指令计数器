@@ -1,0 +1,33 @@
+module PC(
+       input clk,
+       input rst,
+       input jumpflag,
+       input [31:0] jumpaddr, //跳转地址
+       input [5:0] stall,
+       output reg [31:0] PC=8'h00003000,
+       input PCWr
+    );
+    
+    reg ce;
+    
+    always @(posedge clk) begin
+       if(rst==1)
+           ce <= 1'b0;
+       else if(stall[0]== 1)
+           ce <= 1'b0;
+       else 
+          ce <= 1'b1;
+    end       
+    
+    always @(posedge clk) begin
+      if(ce == 0) 
+         PC <= 8'h00003000;
+      else  begin
+         if(jumpflag == 1)
+           PC <= jumpaddr;
+         else 
+           PC <= PC + 4; //执行下一条指令
+       end
+    end
+    
+endmodule
