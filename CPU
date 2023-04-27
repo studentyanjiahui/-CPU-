@@ -1,0 +1,233 @@
+module CPU(
+   input rst,is_indelay,
+   input [31:0] pc_addr,pc_i,reg1_data,reg2_data,
+   input [31:0] ex_wdata,mem_wdata,memwb_data,    //用于处理数据相关
+   input ex_wreg,mem_wreg,memwb_en,
+   input [4:0] ex_wadd_i,mem_wadd_i,memwb_add,
+   output reg jumpflag,   //IMWr用于改变指令寄存器
+   output reg wr_en,re_en1,re_en2, //三个RF存储控制
+   output reg [2:0] sel,      //执行阶段决定计算结果是否写入
+   output reg [3:0] opsel,    //选择的运算类型
+   output reg [4:0] RFaddr1,RFaddr2,RFwaddr, //读RF中操作数地址
+   output reg [31:0] reg1_d,reg2_d,jumpaddr,
+   output reg next_inst_in_delay,is_indelay_o,cpu_stop
+    );
+   
+   wire [31:0] pc_plus_4; 
+   assign pc_plus_4 = pc_i + 4;
+   wire [31:26] op=pc_i[31:26];
+   wire [25:21] rs=pc_i[25:21];//结果存入的寄存器
+   wire [20:16] rt=pc_i[20:16];//计算过程中所用的a
+   wire [15:11] rd=pc_i[15:11];//计算过程中所用的b
+   wire [10:6] shamt=pc_i[10:6];
+   wire [5:0] func=pc_i[5:0];
+   wire [15:0] imm1=pc_i[15:0];
+   wire [25:0] address=pc_i[25:0];
+   reg [31:0] imm;
+   reg ram ;
+   
+    //state发生变化就跳转
+    always @(*) begin
+      if(rst==1)begin
+         wr_en <= 0; re_en1 <= 0; re_en2 <= 0;  opsel <=4'bzzzz; cpu_stop <= 0;
+        RFwaddr <= 5'b0; sel <= 3'bzzz; RFaddr1 <=5'b0; RFaddr2 <=5'b0; ram <= 0;
+        jumpflag <= 0; jumpaddr <= 32'b0;  jumpaddr <= 32'b0; next_inst_in_delay <= 0;
+      end
+      else begin
+        case(op)
+          6'b0: 
+            begin  
+              next_inst_in_delay <= 1; cpu_stop <= 0; imm <= 32'b0; ram <= 0;
+              case(func)
+                6'b100000:begin           //add
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                   RFaddr1 <= rs; RFaddr2 <= rt; jumpflag <= 0;
+                   opsel <= 4'b1000;  sel <= 3'b010;  jumpaddr <= 32'b010; 
+                end
+                6'b100001:begin           //addu无符号计算
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                   RFaddr1 <= rs; RFaddr2 <= rt; opsel <= 4'b0000; sel <= 3'b010;
+                   jumpflag <= 0;  jumpaddr <= 32'b0;
+                end
+                6'b100010:begin         //sub
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                   RFaddr1 <= rs; RFaddr2 <= rt;opsel <= 4'b1001; sel <= 3'b010;
+                   jumpflag <= 0;  jumpaddr <= 32'b0;
+                end
+                6'b100011:begin        //subu
+                 wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                 RFaddr1 <= rs; RFaddr2 <= rt;opsel <= 4'b0001;  sel <= 3'b010;
+                 jumpflag <= 0;  jumpaddr <= 32'b0;
+                end   
+                6'b100100:begin       //and
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                   RFaddr1 <= rs; RFaddr2 <= rt;opsel <= 4'b0011; sel <= 3'b0;
+                   jumpflag <= 0;
+                end    
+                6'b100101:begin       //or
+                wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                RFaddr1 <= rs; RFaddr2 <= rt; jumpflag <= 0;
+                   opsel <= 4'b0010; sel <= 3'b000;
+                end
+                6'b100110:begin      //xor
+                wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                RFaddr1 <= rs; RFaddr2 <= rt;  jumpaddr <= 32'b0;
+                   opsel <= 4'b1011; sel <= 3'b010; jumpflag <= 0;
+                end
+                6'b100111:begin      //nor
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                   RFaddr1 <= rs; RFaddr2 <= rt; jumpflag <= 0;
+                   opsel <= 4'b0100; sel <= 3'b0;  jumpaddr <= 32'b0;
+                end
+                6'b101010:begin      //slt
+                    wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                    RFaddr1 <= rs; RFaddr2 <= rt; jumpflag <= 0;
+                    opsel <= 4'b0111;  sel <=3'b0;  jumpaddr <= 32'b0;
+                end
+                6'b101011:begin         //sltu  
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                    RFaddr1 <= rs; RFaddr2 <= rt; jumpflag <= 0;
+                    opsel <= 4'b1010;  sel <= 3'b0;  jumpaddr <= 32'b0;
+                end
+                6'b000000:begin         //sll
+                   opsel <= 4'b0110; sel <= 3'b0; RFaddr2 <= shamt; RFaddr1 <= rd;  
+                   RFwaddr <= rt; wr_en <= 1; re_en1 <= 1; re_en2 <= 1;
+                   jumpflag <= 0;  jumpaddr <= 32'b0;
+                end
+                6'b000010:begin         //srl
+                   opsel <= 4'b0101; sel <= 3'b0; RFaddr2 <= shamt; RFaddr1 <= rd;  
+                   RFwaddr <= rt; wr_en <= 1; re_en1 <= 1; re_en2 <= 1; 
+                   jumpflag <= 0;  jumpaddr <= 32'b0;
+                end
+                6'b000011:begin         //sra
+                   opsel <= 4'b1100; sel <= 3'b0; RFaddr2 <= shamt; RFaddr1 <= rd;  
+                   RFwaddr <= rt; wr_en <= 1; re_en1 <= 1; re_en2 <= 1;
+                   jumpflag <= 0;  jumpaddr <= 32'b0;
+                end
+                6'b000100:begin         //sllv
+                  wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                  RFaddr1 <= rs; RFaddr2 <= rt; jumpflag <= 0;
+                   opsel <= 4'b0110; sel <= 3'b0;  jumpaddr <= 32'b0;
+                end
+                6'b000110:begin         //srlv
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                   RFaddr1 <= rs; RFaddr2 <= rt;  jumpaddr <= 32'b0;
+                   opsel <= 4'b0101; sel <= 3'b0; jumpflag <= 0;
+                end
+                6'b000111:begin         //srav
+                   wr_en <= 1; re_en1 <= 1; re_en2 <= 1; RFwaddr <= rd; 
+                   RFaddr1 <= rs; RFaddr2 <= rt; jumpflag <= 0;
+                   opsel <= 4'b1100; sel <= 3'b0;  jumpaddr <= 32'b0;
+                end
+                6'b001000:begin            //jr指令
+                   opsel <= 4'b1111; sel <= 3'b111; RFwaddr <= 5'b0; 
+                   RFaddr1 <= rs; RFaddr2 <= 5'b0; wr_en <= 0; re_en1 <= 1; 
+                   re_en2 <= 0; jumpflag <= 1;  jumpaddr <= reg1_d; 
+                end
+             default:begin 
+                 wr_en <= 0; re_en1 <= 0; re_en2 <= 0;  opsel <=4'bzzzz; RFwaddr <= 5'b0;
+                 sel <= 3'bzzz; RFaddr1 <=5'b0; RFaddr2 <=5'b0;  jumpaddr <= 32'b0; jumpflag <= 0;
+                 end
+             endcase
+          end 
+          6'b001100:begin                   //andi
+              opsel <= 4'b0011; sel <= 3'b0; wr_en <= 1; re_en1 <= 1; cpu_stop <= 0;
+              re_en2 <= 0; RFwaddr <= rt; RFaddr1 <= rs; RFaddr2 <= 5'b0; ram <= 0;
+              imm <= {16'b0,imm1}; jumpflag <= 0; jumpaddr <= 32'b0; next_inst_in_delay <= 1;
+          end
+          6'b001111:begin                   //lui
+              sel <= 3'b001; opsel <= 4'bzzzz;  re_en1 <= 1; re_en2 <= 0; cpu_stop <= 0; 
+              wr_en <= 1;  RFwaddr <= rt; RFaddr1 <=5'b0; RFaddr2 <=5'b0; ram <= 0;
+              imm <={imm1,16'b0}; jumpflag <= 0;  jumpaddr <= 32'b0; next_inst_in_delay <= 1;
+          end
+          6'b001001:begin                 //addiu
+             sel <= 3'b010; opsel <= 4'b0; re_en1 <= 1; RFaddr1 <= rs; RFwaddr <= rt;
+              wr_en <= 1; re_en2 <= 0; next_inst_in_delay <= 1; cpu_stop <= 0; ram <= 0;
+             imm <= {16'b0,imm1}; jumpflag <= 0; jumpaddr <= 32'b0; RFaddr2 <= 5'b0;
+          end
+          6'b000010:begin                   //j
+            re_en1 <= 1'bz; re_en2 <= 1'bz; wr_en <= 0; opsel <= 4'bzzzz; sel <=3'b011;
+            RFwaddr <= 5'b0; RFaddr1 <=5'b0; RFaddr2 <=5'b0; jumpflag <= 1; cpu_stop <= 0;
+            jumpaddr <= {pc_plus_4[31:28],pc_i[25:0],2'b00}; next_inst_in_delay <= 1;
+            imm <= 32'b0; ram <= 0;
+          end
+          6'b001101: begin               //ori
+               wr_en <= 1'b1; opsel <= 4'b0010; sel <= 3'b0; RFwaddr <= rt; RFaddr1 <= rs;
+               RFaddr2 <= 5'b0; re_en1 <= 1; re_en2 <= 0; imm <= {16'b0,imm1}; ram <= 0;
+               jumpflag <= 0;  jumpaddr <= 32'b0; next_inst_in_delay <= 1; cpu_stop <= 0;
+          end
+          6'b101011:begin     //sw
+              RFwaddr <= 5'b0 ;  wr_en <= 0; sel <= 3'b100; opsel <= 4'bzzzz; imm <= {16'b0,imm1};
+              jumpflag <= 0 ; jumpaddr <=32'b0; next_inst_in_delay <= 1; cpu_stop <= 0;
+             re_en2 <= 1; re_en1 <= 1;  RFaddr1 <= rt; RFaddr2 <= rs; ram <= 1;
+          end
+          6'b100011:begin     //lw
+              RFaddr1 <= 5'bz ;  wr_en <= 1; sel <= 3'b101; opsel <= 4'bzzzz; imm <= {16'b0,imm1};
+                jumpflag <= 0 ; jumpaddr <=32'b0; next_inst_in_delay <= 1; cpu_stop <= 0;
+               re_en2 <= 1; re_en1 <= 1;  RFwaddr <= rt; RFaddr2 <= rs;  ram <= 1; 
+         end
+       default:begin    
+           wr_en <= 0; re_en1 <= 0; re_en2 <= 0;  opsel <=4'bzzzz; imm <= 32'b0;
+           RFwaddr <= 5'b0; sel <= 3'bzzz; RFaddr1 <=5'b0; RFaddr2 <=5'b0; ram <= 0;
+           jumpflag <= 0;  jumpaddr <= 32'b0; next_inst_in_delay <= 1; cpu_stop <= 0;
+         end
+        endcase
+     end
+    end
+    
+  always @( * ) begin
+     if(rst == 1) begin
+         reg1_d <= 32'b0;
+         is_indelay_o <= 0;
+        end
+     else if(ex_wreg==1 && re_en1 ==1 && RFaddr1 ==ex_wadd_i)
+     begin
+         is_indelay_o <= 0;
+         reg1_d <= ex_wdata;
+     end
+     else if(mem_wreg ==1 && re_en1 ==1 && RFaddr1 == mem_wadd_i) 
+     begin
+         is_indelay_o <= 0;
+         reg1_d <= mem_wdata;
+     end      
+     else if(memwb_en ==1 && re_en1 ==1 && RFaddr1 == memwb_add) 
+     begin
+         is_indelay_o <= 0;
+         reg1_d <= memwb_data;
+     end   
+     else begin
+        is_indelay_o <= is_indelay;
+       if(re_en1 == 1)
+          reg1_d <= reg1_data;
+       else if(re_en1 == 0)
+          reg1_d <= imm;
+       else
+          reg1_d <= 32'b0;
+      end
+  end
+  
+  always @( * ) begin
+     if(rst == 1)
+         reg2_d <= 32'b0;
+     else if(ex_wreg==1 && re_en2 ==1 && RFaddr2 ==ex_wadd_i)
+     begin
+         reg2_d <= ex_wdata;
+     end
+     else if(mem_wreg ==1 && re_en2 ==1 && RFaddr2 == mem_wadd_i) 
+     begin
+         reg2_d <= mem_wdata;
+     end   
+     else if(memwb_en ==1 && re_en2 ==1 && RFaddr2 == memwb_add) 
+     begin
+         reg2_d <= memwb_data;
+     end   
+     else if(ram == 1) 
+         reg2_d <= reg2_data + imm;
+     else if(re_en2 == 1)
+         reg2_d <= reg2_data;
+     else if(re_en2 == 0)
+         reg2_d <= imm;
+     else
+         reg2_d <= 32'b0;
+  end
+endmodule
