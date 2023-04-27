@@ -1,0 +1,63 @@
+module RF(
+   input clk,
+   input rst,
+   input [31:0] write_data, //写端口$3
+   input [4:0] addr,
+   input wr_en,
+   input re_en1,
+   input [4:0] raddr1,
+   output reg [31:0] read_data1,
+   input re_en2,
+   input [4:0] raddr2, 
+   output reg [31:0] read_data2
+    );
+    
+    reg [31:0] RF [31:0];  //32个通用寄存器
+    //通用寄存器
+    always @(posedge clk) begin
+        if(rst==0) begin
+           if((wr_en==1)&&(addr!=5'h0))
+            RF[addr]<=write_data;
+           else 
+             RF[addr] <= 32'b0;
+         end
+    end
+    
+    always @(*) begin
+       if(rst==1) begin
+           read_data1 <= 32'b0;
+       end
+       else if(raddr1==32'b0) begin //$0寄存器
+           read_data1 <= 32'b0;
+       end
+       else if((wr_en==1)&&(re_en1==1)&&(addr==raddr1)) begin
+          read_data1 <= write_data;
+       end
+       else if(re_en1==1) begin
+          read_data1 <= RF[raddr1];
+       end
+       else begin
+          read_data1 <= 32'b0;
+       end
+    end
+    
+    always @(*) begin
+      if(rst==1) begin
+          read_data2 <= 32'b0;
+      end
+      else if(raddr2==32'b0) begin //$0寄存器
+          read_data2 <= 32'b0;
+      end
+      else if((wr_en==1)&&(re_en2==1)&&(addr==raddr2)) begin
+         read_data2 <= write_data;
+      end
+      else if(re_en2==1) begin
+         read_data2 <= RF[raddr2];
+      end
+      else begin
+        read_data2 <= 32'b0;
+      end
+    
+    end
+    
+endmodule
