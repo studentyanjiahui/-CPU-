@@ -1,0 +1,17 @@
+module DM(
+       input [11:2] addr,
+       input [31:0] wdata,
+       output reg [31:0] rdata,
+       input re_en,
+       output wr_en
+    );
+    
+    reg [31:0] DM [0:1024];
+    
+    always @(*) begin
+       if(wr_en == 1)
+          DM[addr] <= wdata;
+       else if( re_en == 1)
+          rdata <=  DM[addr];
+    end
+endmodule
