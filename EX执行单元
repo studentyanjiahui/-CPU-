@@ -1,0 +1,120 @@
+module ex(
+  input rst,wr_i,
+  input [3:0] opsel,
+  input [2:0] sel,
+  input [5:0] stall, 
+  input is_indelay,
+  input [31:0] linkaddr,
+  input [31:0] reg1_cpu,reg2_cpu,   //在CPU处理模块进行计算的操作数
+  input [4:0] rfwaddr, //写入RF的地址
+  output reg [31:0] wdata,
+  output reg wri_en,      //最终指令是否要写入寄存器
+  output reg [4:0] waddr,  //写入RF寄存器的地址
+  output reg ex_stop,
+  output reg [1:0] dm_out,
+  output reg [11:2] dm_add
+    );
+    
+  reg [31:0] result;   //保留中间结果  
+  wire [31:0] reg2_bi,result_sum;
+  wire ovsum,sltres;
+
+   
+  assign  reg2_bi=((opsel==4'b0001)||(opsel==4'b1001)||(opsel==4'b1010)) ? (~reg2_cpu)+1 : reg2_cpu; 
+  assign result_sum=reg1_cpu + reg2_bi;
+  assign  ovsum=((!reg1_cpu[31] && !reg1_cpu[31]) && result_sum[31]) || (
+          (reg1_cpu[31] && reg2_bi[31]) && (!result_sum[31]));
+  assign sltres=(opsel==4'b1010) ? ((reg1_cpu[31] && !reg2_cpu[31])|| (!reg1_cpu[31] && 
+          !reg2_cpu[31] && result_sum[31]) || (reg1_cpu[31] && reg2_cpu[31] && 
+          result_sum[31])) : (reg1_cpu < reg2_cpu); 
+   
+  always @(*) begin
+     if(rst==1) begin
+        result <= 32'b0;
+     end
+     else begin
+        case(opsel)
+          4'b0000: result <= result_sum;   //无符号加
+          4'b0001: result <= result_sum;  //减法
+          4'b0010: result <= reg1_cpu | reg2_cpu;
+          4'b0011: result <= reg1_cpu & reg2_cpu;
+          4'b0100: result <= ~(reg1_cpu | reg2_cpu);
+          4'b0101: result <= reg1_cpu >> reg2_cpu[4:0];
+          4'b0110: result <= reg1_cpu << reg2_cpu[4:0];
+          4'b0111: result <= sltres;
+          4'b1000: result <= result_sum ;   //有符号加
+          4'b1001: result <= result_sum;    //有符号减
+          4'b1010:result <= sltres;
+          4'b1011: result <= reg1_cpu ^ reg2_cpu;
+          4'b1100: begin 
+             result <= ({32{reg1_cpu[31]}}<<(6'd32-{1'b0,reg2_cpu[4:0]})) | reg1_cpu >> reg2_cpu[4:0];
+             end
+          default: result <= 32'b0;
+        endcase
+     end 
+  end
+  
+  always @(*) begin
+    ex_stop <=0;
+    if(rst ==1) begin
+       waddr <= 5'b0;
+       wri_en <= 0;
+       wdata <= 32'b0;
+       dm_out <= 2'b0;
+    end
+    else begin
+       case(sel)       //根据sel选取操作
+         3'b0: begin 
+             wdata <= result;  //结果保存
+             wri_en <= wr_i;
+             waddr <= rfwaddr;
+             dm_out <= 2'b0;
+             dm_add <= 10'bz;
+           end
+         3'b001: begin
+             wdata <=reg2_cpu;
+             wri_en <= wr_i;
+             waddr <= rfwaddr;
+             dm_out <= 2'b0 ;   
+             dm_add <= 10'bz;  
+         end
+         3'b010:begin 
+           dm_out <= 2'b0;
+           dm_add <= 10'bz;
+           if (ovsum==1) begin
+              wri_en <= wr_i;
+              wdata <= result;
+              waddr <= rfwaddr;
+              //后续添加溢出标志位输出
+            end
+           else
+             wri_en <= wr_i;
+             wdata <= result;
+             waddr <= rfwaddr;
+         end
+         3'b011: begin
+             wdata <= linkaddr;
+             wri_en <= wr_i;
+             waddr <= 5'bzzzzz;
+             dm_out <= 0;
+             dm_add <= 10'bz;
+          end
+          3'b100: begin
+             wdata <= reg1_cpu ;
+             wri_en <= wr_i;
+             waddr <= rfwaddr ;
+             dm_out <= 2'b01;
+             dm_add <= reg2_cpu[11:2];
+          end
+          3'b101: begin
+             wdata <= 32'b0;
+             wri_en <= wr_i;
+             waddr <= rfwaddr ;
+             dm_out <= 2'b11;
+             dm_add <= reg2_cpu[11:2];
+          end
+         default: begin wdata <=32'b0; waddr <= 5'b0;   dm_out <= 2'b0; end //留与后续扩展 
+       endcase
+    end
+  end
+endmodule
