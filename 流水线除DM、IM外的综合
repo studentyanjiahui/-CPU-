@@ -1,0 +1,88 @@
+module mips(
+   input PCWr,
+   input clk, //时钟信号
+   input rst,  //复位指令
+   input [31:0] im_inst, //IM读入指令
+   input [31:0] dm_idata,
+   output [11:2] im_addr,
+   output [31:0] dm_odata,
+   output [11:2] dm_addrs,
+   output wr_i,
+   output re_en
+    );
+    wire [31:0]  id_inst,rdata1,id_pc,
+                  rdata2,ex_jaddr,
+                 cpu_1d,cpu_2d,
+                 jumpadd,ex_wdata,
+                 exrdata1,exrdata2,  //cpu_ex转执行阶段的数据输出
+                 exmemwdata,memwdata,//传值和访存阶段的数据和地址
+                 wb_wdata,memwb_wdata,//回写的RF寄存器数据
+                 pcout;//pc输出的当前指令地址,存储阶段
+    wire  jflag,wri_en,re1_en,re2_en,
+           wrien,exmemwen,wreg,wb_wreg,
+           exwren,is_delay,is_delay_o,
+          next_instindel,ex_is_delay,cpuex_isdelay,
+          ex_stop,cpu_stop,memwb_wreg;    //负责stop的控制
+    wire pc=32'b0;
+
+    wire [3:0] select,ex_opsel;  //CPU执行阶段的运算选择
+    wire [4:0] rfadd1,rfadd2,rfwadd,waddr,memwb_waddr,
+                exmemaddr,memaddr,wb_waddr,exwaddr;
+    wire [2:0] sel,ex_sel;
+    wire [5:0] stall;  //停机表
+    wire [11:2] dm_addr,exmdm_addr;
+    wire [1:0] dm_out,exmdm_out;
+    
+    CTRL U_CTRL(.rst(rst),.ex_stop(ex_stop),.cpu_stop(cpu_stop),.stopall(stall));
+    
+    PC U_PC(.clk(clk),.rst(rst),.PC(pcout),.PCWr(PCWr),
+            .stall(stall),.jumpflag(jflag),.jumpaddr(jumpadd));   
+    
+    assign im_addr=pcout[11:2];
+    
+    IF U_IF(.clk(clk),.rst(rst),.pc(pcout),.pc_inst(im_inst),.id_pc(id_pc),
+                 .id_pcinst(id_inst),.stall(stall));
+                 
+    
+    CPU U_CPU(.rst(rst),.pc_i(id_inst),.reg1_data(rdata1),.reg2_data(rdata1),
+           .jumpflag(jflag),.wr_en(wri_en),.re_en1(re1_en),.re_en2(re2_en),
+           .sel(sel),.opsel(select),.RFaddr1(rfadd1),.RFaddr2(rfadd2),.RFwaddr(rfwadd),
+           .reg1_d(cpu_1d),.reg2_d(cpu_2d),.jumpaddr(jumpadd),.is_indelay( is_delay),
+           .next_inst_in_delay(next_instindel),.is_indelay_o(is_delay_o),
+           .cpu_stop(cpu_stop),.pc_addr(id_pc),.ex_wdata(ex_wdata),.memwb_data(memwb_wdata),
+            .mem_wdata(memwdata),.ex_wreg(wrien),.mem_wreg(wreg),.memwb_en(memwb_wreg),
+            .ex_wadd_i(waddr),.mem_wadd_i(memaddr),.memwb_add(memwb_waddr));
+
+    RF U_RF(.clk(clk),.rst(rst),.addr(wb_waddr),.wr_en(wb_wreg),.re_en1(re1_en),
+       .re_en2(re2_en),.raddr1(rfadd1),.raddr2(rfadd2),.write_data(wb_wdata),
+       .read_data1(rdata1),.read_data2(rdata2));
+    
+    CPU_EX U_CPU_EX(.clk(clk),.rst(rst),.stall(stall),.cpu_opsel(select),.cpu_sel(sel),
+            .cpu_reg1(cpu_1d),.cpu_reg2(cpu_2d),.cpu_waddr(rfwadd),.cpu_wren(wri_en),
+            .ex_opsel(ex_opsel),.ex_sel(ex_sel),.ex_reg1(exrdata1),.ex_reg2(exrdata2),
+            .ex_waddr(exwaddr),.ex_wren(exwren),.ex_jumpaddr(ex_jaddr),
+            .ex_is_indelay(ex_is_delay),.is_in_delay(cpuex_isdelay),.cpu_jumpaddr(jumpadd),
+            .next_inst_indelay(next_instindel),.cpu_is_indelay(is_delay_o));
+    
+    ex U_ex(.rst(rst),.wr_i(exwren),.stall(stall),.opsel(ex_opsel),.sel(ex_sel),
+    .reg1_cpu(exrdata1),.reg2_cpu(exrdata2),.rfwaddr(exwaddr),.wdata(ex_wdata),
+    .wri_en(wrien),.waddr(waddr),.linkaddr(jumpadd),.is_indelay(cpuex_isdelay),
+    .ex_stop(ex_stop),.dm_out(dm_out),.dm_add(dm_addr));
+       
+    ex_mem U_exmem(.clk(clk),.rst(rst),.stall(stall),.ex_addr(waddr),.wri_en(wrien),
+                   .wdata(ex_wdata),.mem_addr(exmemaddr),.DM_out(dm_out),.dm_out(exmdm_out),
+                   .mem_wri(exmemwen),.wridata(exmemwdata),.dm_add(dm_addr),.memdm_add(exmdm_addr));
+       
+    mem U_mem(.rst(rst),.wd_i(exmemaddr),.wreg_i(exmemwen),.wdata_i(exmemwdata),
+               .wd_o(memaddr),.wreg_o(wreg),.wdata_o(memwdata),.dm_out(exmdm_out),
+               .dm_addr(exmdm_addr),.DM_indata(dm_idata),.wr_i(wr_i),.re_en(re_en),
+               .DM_data(dm_odata),.DM_addr(dm_addrs));
+       
+    mem_wb U_memwb(.rst(rst),.stall(stall),.mem_wd(memaddr),.mem_wreg(wreg),
+                   .mem_wdata(memwdata),.wb_wd(memwb_waddr),.clk(clk),
+                   .wb_wreg(memwb_wreg),.wb_data(memwb_wdata));
+    
+    wb U_wb(.rst(rst),.wdata(memwb_wdata),.wri_ce(memwb_wreg),.waddr(memwb_waddr),
+            .wb_wri(wb_wreg),.wb_wdata(wb_wdata),.wb_waddr(wb_waddr));
+    
+endmodule
