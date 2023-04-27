@@ -1,0 +1,53 @@
+module CPU_EX(
+  input clk,rst,
+  input [3:0] cpu_opsel,
+  input [2:0] cpu_sel,
+  input [31:0] cpu_reg1,cpu_reg2,
+  input [4:0] cpu_waddr,
+  input [31:0] cpu_jumpaddr,
+  input next_inst_indelay,cpu_is_indelay,
+  input cpu_wren,
+  input [5:0] stall,
+  output reg [3:0] ex_opsel,
+  output reg [2:0] ex_sel,
+  output reg [31:0] ex_reg1,ex_reg2,ex_jumpaddr,
+  output reg [4:0] ex_waddr,
+  output reg ex_wren,ex_is_indelay,is_in_delay
+    );
+    
+    always @(posedge clk) begin
+       if(rst==1) begin
+          ex_opsel <= 4'bzzzz;
+          ex_sel <= 3'bzzz;
+          ex_reg1 <= 32'b0;
+          ex_reg2 <= 32'b0;
+          ex_waddr <= 5'b0;
+          ex_wren <= 0;
+          ex_jumpaddr <= 32'b0;
+          is_in_delay <= 0;
+          ex_is_indelay<= 0;
+       end
+       else if(stall[2] == 1 && stall[3] == 0) begin
+            ex_opsel <= 4'bzzzz;
+          ex_sel <= 3'bzzz;
+          ex_reg1 <= 32'b0;
+          ex_reg2 <= 32'b0;
+          ex_waddr <= 5'b0;
+          ex_wren <= 0;
+          ex_jumpaddr <= 32'b0;
+          is_in_delay <= 0;
+          ex_is_indelay<= 0;    
+       end
+       else begin
+               ex_opsel <= cpu_opsel;
+               ex_sel <= cpu_sel;
+               ex_reg1 <= cpu_reg1;
+               ex_reg2 <= cpu_reg2;
+               ex_waddr <= cpu_waddr;
+               ex_wren <= cpu_wren;
+               is_in_delay <= next_inst_indelay;
+               ex_is_indelay<= cpu_is_indelay;
+               ex_jumpaddr <= cpu_jumpaddr;
+       end
+    end
+endmodule
