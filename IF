@@ -1,0 +1,24 @@
+module IF(
+    input wire clk,
+    input wire rst,
+    input [5:0] stall,
+    input wire [31:0] pc,  //pc输入
+    input wire [31:0] pc_inst,//外部指令
+    output reg [31:0] id_pc, //传给译码器的指令
+    output reg [31:0] id_pcinst
+    );
+    
+    always @(posedge clk) begin
+       if(rst == 1) begin
+          id_pc <=32'b0;
+          id_pcinst <=32'b0;
+        end
+       else if(stall[1]==1 && stall[2] ==0) begin
+          id_pc <= 32'b0;
+          id_pcinst <= 32'b0;
+       end
+       else  begin
+          id_pc <= pc;
+          id_pcinst <= pc_inst;
+       end
+   end
