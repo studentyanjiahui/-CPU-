@@ -1,0 +1,23 @@
+module wb(
+      input rst,
+      input [31:0] wdata,
+      input wri_ce,
+      input [4:0] waddr,
+      output reg wb_wri,
+      output reg [31:0] wb_wdata,
+      output reg [4:0] wb_waddr
+    );
+    
+   always @(*)begin
+      if(rst ==1) begin
+         wb_wdata <=32'b0;
+         wb_wri <= 0;
+         wb_waddr <= 5'b0;
+      end 
+      else begin
+         wb_wdata <= wdata;
+         wb_wri <= wri_ce;
+         wb_waddr <= waddr;
+      end
+   end 
+endmodule
