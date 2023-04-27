@@ -1,0 +1,53 @@
+module mem(
+      input rst,
+      input [4:0] wd_i,
+      input wreg_i,
+      input [31:0] wdata_i,
+      input [1:0] dm_out,
+      input [11:2] dm_addr,
+      input [31:0] DM_indata,
+      output reg [4:0] wd_o,
+      output reg wreg_o,
+      output reg [31:0] wdata_o,
+      output reg [31:0] DM_data,
+      output reg [11:2] DM_addr,
+      output reg wr_i,
+      output reg re_en
+    );
+    
+    always @(*) begin
+        if(rst == 1) begin
+             wd_o <= 5'b0;
+             wreg_o <= 1'b0;
+             wdata_o <= 32'b0;
+        end
+        else  begin
+          case (dm_out)
+           2'b01:begin
+               wreg_o <= wreg_i;
+               wdata_o <= 32'b0;
+               DM_addr <= dm_addr;
+               wd_o <= wd_i;
+               DM_data <= wdata_i;
+               wr_i <= 1;
+               re_en <= 0;
+           end
+           2'b11:begin
+              wreg_o <= wreg_i;
+              wdata_o <= DM_indata;
+              DM_addr <= dm_addr;
+              wd_o <= wd_i;
+              DM_data <= 32'b0;
+              wr_i <= 0;
+              re_en <= 1;
+           end
+           default: begin 
+              wreg_o <= wreg_i;
+              wdata_o <= wdata_i;
+              wd_o <= wd_i;
+           end
+          endcase
+        end
+    end
+    
+endmodule
