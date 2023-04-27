@@ -1,0 +1,23 @@
+`timescale 1ns / 1ps
+module ceshi(
+    );
+    reg clock ;
+    reg rst;
+    reg PCWr;
+    
+    initial begin 
+      clock =0;
+    end
+    always #10 clock = ~clock;
+
+    initial begin
+      rst =0;
+      PCWr = 1;
+      #700 rst = 1;
+      #1000 $finish;
+   end
+   
+   
+   mips_pipeline U_mipspipeline(.PCWr(PCWr),.clk(clock),.rst(rst));
+   
+endmodule
